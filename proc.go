@@ -32,6 +32,10 @@ func Cat(rs ...io.Reader) *Proc {
 	return p
 }
 
+func Cmd(name string, arg ...string) *Proc {
+	return Cat().Cmd(name, arg...)
+}
+
 func Err(err error) *Proc {
 	return &Proc{err: err}
 }

@@ -8,10 +8,9 @@ import (
 )
 
 func main() {
-	p := proc.Cat().
-		Cmd("find", os.Args[2], "-type", "f").
+	p := proc.Cmd("find", os.Args[2], "-type", "f").
 		Map(func(file string) *proc.Proc {
-			p := proc.Cat().Cmd("sed", os.Args[1], file)
+			p := proc.Cmd("sed", os.Args[1], file)
 			if p.Err() == nil {
 				p = p.Cmd("tee", file)
 			}
