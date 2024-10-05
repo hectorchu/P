@@ -4,19 +4,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/hectorchu/proc"
+	"github.com/hectorchu/proc/cmd"
 )
 
 func main() {
-	p := proc.Cmd("find", os.Args[2], "-type", "f").
-		Map(func(file string) *proc.Proc {
-			p := proc.Cmd("sed", os.Args[1], file)
-			if p.Err() == nil {
-				p = p.Put(file)
-			}
-			return p
-		})
-	if p.Err() != nil {
-		fmt.Fprintln(os.Stderr, p.Err())
+	if err := cmd.FindReplace(os.Args[1], os.Args[2]).Err(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 	}
 }
