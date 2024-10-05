@@ -12,7 +12,7 @@ func main() {
 		Map(func(file string) *proc.Proc {
 			p := proc.Cmd("sed", os.Args[1], file)
 			if p.Err() == nil {
-				p = p.Cmd("tee", file)
+				p = p.Put(file)
 			}
 			return p
 		})

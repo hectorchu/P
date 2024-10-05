@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"math"
+	"os"
 	"os/exec"
 
 	"github.com/djherbis/buffer"
@@ -95,6 +96,32 @@ func (p *Proc) Map(f func(string) *Proc) *Proc {
 			q.err = s.Err()
 		}
 		w.CloseWithError(q.err)
+		close(q.done)
+	}()
+	return q
+}
+
+func (p *Proc) Nul() *Proc {
+	q := &Proc{done: make(chan struct{})}
+	go func() {
+		q.err = p.Err()
+		close(q.done)
+	}()
+	return q
+}
+
+func (p *Proc) Put(name string) *Proc {
+	f, err := os.Create(name)
+	q := &Proc{err: err}
+	if err != nil {
+		return q
+	}
+	q.done = make(chan struct{})
+	go func() {
+		_, q.err = io.Copy(f, p)
+		if err := f.Close(); q.err == nil {
+			q.err = err
+		}
 		close(q.done)
 	}()
 	return q
