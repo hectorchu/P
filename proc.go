@@ -26,21 +26,16 @@ func Cat(s ...any) *Proc {
 		switch r := s.(type) {
 		case io.Reader:
 			rs = append(rs, r)
+		case []byte:
+			rs = append(rs, bytes.NewReader(r))
 		case string:
 			rs = append(rs, strings.NewReader(r))
 		}
 	}
-	if len(rs) == 0 {
-		return &Proc{}
-	}
-	r, w := nio.Pipe(buffer.New(math.MaxInt64))
-	p := &Proc{r: r, done: make(chan struct{})}
-	go func() {
-		_, p.err = io.Copy(w, io.MultiReader(rs...))
-		w.CloseWithError(p.err)
-		close(p.done)
-	}()
-	return p
+	return Fun(func(w io.Writer) error {
+		_, err := io.Copy(w, io.MultiReader(rs...))
+		return err
+	})
 }
 
 func Cmd(name string, arg ...string) *Proc {
@@ -51,36 +46,41 @@ func Err(err error) *Proc {
 	return &Proc{err: err}
 }
 
+func Fun(f func(io.Writer) error) *Proc {
+	r, w := nio.Pipe(buffer.New(math.MaxInt64))
+	p := &Proc{r: r, done: make(chan struct{})}
+	go func() {
+		p.err = f(w)
+		w.CloseWithError(p.err)
+		close(p.done)
+	}()
+	return p
+}
+
 func (p *Proc) Cat(s ...any) *Proc {
 	return Cat(append([]any{p}, s...)...)
 }
 
 func (p *Proc) Cmd(name string, arg ...string) *Proc {
-	q := &Proc{}
-	c := exec.Command(name, arg...)
-	c.Stdin = p.r
-	r, w := nio.Pipe(buffer.New(math.MaxInt64))
-	q.r, c.Stdout = r, w
-	var buf bytes.Buffer
-	c.Stderr = &buf
-	if q.err = c.Start(); q.err != nil {
-		w.CloseWithError(q.err)
-		return q
-	}
-	q.done = make(chan struct{})
-	go func() {
-		if q.err = p.Err(); q.err == nil {
-			q.err = c.Wait()
-			if _, ok := q.err.(*exec.ExitError); ok {
-				if s := bufio.NewScanner(&buf); s.Scan() {
-					q.err = errors.New(s.Text())
-				}
-			}
+	return Fun(func(w io.Writer) (err error) {
+		var buf bytes.Buffer
+		c := exec.Command(name, arg...)
+		c.Stdin, c.Stdout, c.Stderr = p.r, w, &buf
+		if err = c.Start(); err != nil {
+			return
 		}
-		w.CloseWithError(q.err)
-		close(q.done)
-	}()
-	return q
+		if err = p.Err(); err != nil {
+			return
+		}
+		err = c.Wait()
+		if _, ok := err.(*exec.ExitError); !ok {
+			return
+		}
+		if s := bufio.NewScanner(&buf); s.Scan() {
+			err = errors.New(s.Text())
+		}
+		return
+	})
 }
 
 func (p *Proc) Err() error {
@@ -91,8 +91,6 @@ func (p *Proc) Err() error {
 }
 
 func (p *Proc) Map(f func(string) *Proc) *Proc {
-	r, w := nio.Pipe(buffer.New(math.MaxInt64))
-	q := &Proc{r: r, done: make(chan struct{})}
 	ch := make(chan *Proc, 10)
 	s := bufio.NewScanner(p)
 	go func() {
@@ -100,45 +98,37 @@ func (p *Proc) Map(f func(string) *Proc) *Proc {
 		}
 		close(ch)
 	}()
-	go func() {
+	return Fun(func(w io.Writer) (err error) {
 		for p := <-ch; p != nil; p = <-ch {
-			if _, q.err = io.Copy(w, p); q.err != nil {
+			if _, err = io.Copy(w, p); err != nil {
 				break
 			}
 		}
 		if s.Err() != nil {
-			q.err = s.Err()
+			err = s.Err()
 		}
-		w.CloseWithError(q.err)
-		close(q.done)
-	}()
-	return q
+		return
+	})
 }
 
 func (p *Proc) Nul() *Proc {
-	q := &Proc{done: make(chan struct{})}
-	go func() {
-		q.err = p.Err()
-		close(q.done)
-	}()
-	return q
+	return Fun(func(io.Writer) error {
+		return p.Err()
+	})
 }
 
 func (p *Proc) Put(name string) *Proc {
-	f, err := os.Create(name)
-	q := &Proc{err: err}
-	if err != nil {
-		return q
-	}
-	q.done = make(chan struct{})
-	go func() {
-		_, q.err = io.Copy(f, p)
-		if err := f.Close(); q.err == nil {
-			q.err = err
+	return Fun(func(w io.Writer) (err error) {
+		f, err := os.Create(name)
+		if err != nil {
+			return
 		}
-		close(q.done)
-	}()
-	return q
+		_, err = io.Copy(f, p)
+		if err2 := f.Close(); err == nil {
+			err = err2
+		}
+		return
+	})
 }
 
 func (p *Proc) Read(b []byte) (int, error) {
