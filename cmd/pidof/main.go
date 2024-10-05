@@ -12,15 +12,13 @@ import (
 
 func main() {
 	p := proc.Cmd("ps", "A").Map(func(s string) *proc.Proc {
-		fs := strings.Fields(s)
-		if filepath.Base(fs[4]) != os.Args[1] {
-			return proc.Cat()
+		if fs := strings.Fields(s); filepath.Base(fs[4]) == os.Args[1] {
+			return proc.Cat(fs[0], "\n")
 		}
-		return proc.Cmd("echo", fs[0])
+		return proc.Cat()
 	}).Cmd("sort", "-n").Map(func(s string) *proc.Proc {
-		return proc.Cmd("echo", "-n", s, "")
-	})
-	p = proc.Cat(p, proc.Cmd("echo"))
+		return proc.Cat(s, " ")
+	}).Cat("\n")
 	if _, err := io.Copy(os.Stdout, p); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}

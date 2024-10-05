@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/djherbis/buffer"
 	"github.com/djherbis/nio/v3"
@@ -19,7 +20,16 @@ type Proc struct {
 	err  error
 }
 
-func Cat(rs ...io.Reader) *Proc {
+func Cat(s ...any) *Proc {
+	var rs []io.Reader
+	for _, s := range s {
+		switch r := s.(type) {
+		case io.Reader:
+			rs = append(rs, r)
+		case string:
+			rs = append(rs, strings.NewReader(r))
+		}
+	}
 	if len(rs) == 0 {
 		return &Proc{}
 	}
@@ -39,6 +49,10 @@ func Cmd(name string, arg ...string) *Proc {
 
 func Err(err error) *Proc {
 	return &Proc{err: err}
+}
+
+func (p *Proc) Cat(s ...any) *Proc {
+	return Cat(append([]any{p}, s...)...)
 }
 
 func (p *Proc) Cmd(name string, arg ...string) *Proc {
