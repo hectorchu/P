@@ -113,7 +113,8 @@ func (p *Proc) Map(f func(string) *Proc) *Proc {
 
 func (p *Proc) Nul() *Proc {
 	return Fun(func(io.Writer) error {
-		return p.Err()
+		_, err := io.Copy(io.Discard, p)
+		return err
 	})
 }
 
