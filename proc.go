@@ -142,3 +142,22 @@ func (p *Proc) Read(b []byte) (int, error) {
 		return 0, io.EOF
 	}
 }
+
+func (p *Proc) Tee(n int) (ps []*Proc) {
+	var ws []io.Writer
+	for range n {
+		r, w := io.Pipe()
+		ws = append(ws, w)
+		ps = append(ps, Fun(func(w io.Writer) error {
+			_, err := io.Copy(w, r)
+			return err
+		}))
+	}
+	go func() {
+		_, err := io.Copy(io.MultiWriter(ws...), p)
+		for _, w := range ws {
+			w.(*io.PipeWriter).CloseWithError(err)
+		}
+	}()
+	return
+}

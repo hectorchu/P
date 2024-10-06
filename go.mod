@@ -1,6 +1,6 @@
 module github.com/hectorchu/proc
 
-go 1.21
+go 1.23
 
 require (
 	github.com/djherbis/buffer v1.2.0
