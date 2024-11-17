@@ -5,12 +5,8 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"math"
 	"os/exec"
 	"strings"
-
-	"github.com/djherbis/buffer"
-	"github.com/djherbis/nio/v3"
 )
 
 type Proc struct {
@@ -46,7 +42,7 @@ func Err(err error) *Proc {
 }
 
 func Fun(f func(io.Writer) error) *Proc {
-	r, w := nio.Pipe(buffer.New(math.MaxInt64))
+	r, w := newPipe()
 	p := &Proc{r: r, done: make(chan struct{})}
 	go func() {
 		p.err = f(w)
